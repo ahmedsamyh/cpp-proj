@@ -21,7 +21,7 @@ void help(const std::string& program){
 	"  Options:\n"
 	"    /?,/h        prints this help.\n"
 	"    /q           be quiet.\n"
-	"    /Y           force yes on all confirmations.\n"
+	"    /F           force the default value on all confirmations.\n"
 	"Note that you can use `-` as a prefix for flags as well.\n"
 	"\n"
 	"Program to make a cpp project.\n"
@@ -62,7 +62,7 @@ int main(int argc, char* argv[]){
 	wants_help = true;
       } else if (a == "q"){
 	quiet = true;
-      } else if (a == "Y"){
+      } else if (a == "F"){
 	force = true;
       } else {
 	fprint(std::cerr, "ERROR: Unknown flag `{}{}`\n", prefix, a);
