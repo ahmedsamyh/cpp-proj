@@ -1,0 +1,6 @@
+# Configure the premake5 and msbuild path here if you don't have them added to your PATH.
+
+# Lines starting with `#` are treated as comments and are ignored
+
+# premake5_path: c:\path\to\premake5\premake5.exe
+# msbuild_path:  c:\path\to\msbuild\msbuild.exe
