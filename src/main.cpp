@@ -34,14 +34,13 @@ bool confirmation(const std::string question, bool _default=true){
   response = str::tolower(response);
   auto valid = [&](const std::string& str){ return str=="" || str=="y" || str=="yes" || str=="n" || str=="no"; };
 
-  print("default: {}\n", _default);
-  print("{} [yes/no]{{default: {}}}\n", question, (_default  ? "yes" : "no"));
+  print("{} [yes/no]{{default: {}}}", question, (_default  ? "yes" : "no"));
   std::getline(std::cin, response);
   response = str::tolower(response);
 
   while (!valid(response)){
     print("Please enter yes or no\n");
-    print("{} [yes/no]{{default: {}}}\n", question, (_default  ? "yes" : "no"));
+    print("{} [yes/no]{{default: {}}}", question, (_default  ? "yes" : "no"));
     std::getline(std::cin, response);
     response = str::tolower(response);
   }
