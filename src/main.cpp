@@ -9,7 +9,40 @@ static bool wants_help = false;
 static bool quiet = false;
 static bool should_list = false;
 static bool dir = false;
-static bool wants_uwu = false;
+static bool wants_thing = false;
+static std::string things[] = {
+  "uwu\n",
+
+  " ∩ ∩ \n"
+  "(uwu)\n",
+
+  "(._.)\n",
+
+  ":D\n",
+
+  ":<\n",
+
+  ":>\n",
+
+  ">:(\n",
+
+  ":O\n",
+
+  "(-_-)\n",
+
+  "(^.^)\n",
+
+  "(O.O)\n",
+
+  ":3\n",
+
+  ";3\n",
+
+  ":P\n",
+
+  ">.<\n",
+};
+static constexpr size_t things_size = (sizeof(things) / sizeof(things[0]));
 // TODO: Change every run_process() to not wait until child process
 // finished when run_sync() and run_async() is implemented in stdcpp.hpp
 // TODO: Have some sort of marker in the project folder to identify
@@ -33,7 +66,7 @@ void help(const std::string& program){
 	"    list                 lists all of the projects that is in the cpp_dir. (basically all folders in there *for now*)\n"
 	"    help                 prints this help.\n"
 	"    dir                  runs emacs on the cpp_dir.\n"
-	"    uwu                  uwu\n"
+	"    ???                  ???\n"
 	"\n"
 	"Program to make a cpp project.\n"
 	"Made by Momoyon.\n");
@@ -60,6 +93,7 @@ bool confirmation(const std::string question, bool _default=true){
 }
 
 int main(int argc, char* argv[]){
+  srand(unsigned int(time(0)));
   ARG();
   program = arg.pop();
 
@@ -92,8 +126,8 @@ int main(int argc, char* argv[]){
 	wants_help = true;
       } else if (a == "dir"){
 	dir = true;
-      } else if (a == "uwu"){
-	wants_uwu = true;
+      } else if (a == "???"){
+	wants_thing = true;
       } else {
 	fprint(std::cerr, "ERROR: Unknown subcommand `{}`\n", a);
 	exit(1);
@@ -112,9 +146,12 @@ int main(int argc, char* argv[]){
     exit(0);
   }
 
-  if (wants_uwu){
-    print(" ∩ ∩ \n"
-	  "(uwu)\n");
+  if (wants_thing){
+    const size_t n = rand() % things_size;
+    ASSERT(n < things_size);
+
+    print("{}", things[n]);
+
     exit(0);
   }
 
