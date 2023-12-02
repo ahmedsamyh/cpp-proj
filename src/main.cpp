@@ -7,22 +7,33 @@ static std::string program;
 static std::string proj_name;
 static bool wants_help = false;
 static bool quiet = false;
-
+static bool should_list = false;
+static bool dir = false;
+static bool wants_uwu = false;
 // TODO: Change every run_process() to not wait until child process
 // finished when run_sync() and run_async() is implemented in stdcpp.hpp
+// TODO: Have some sort of marker in the project folder to identify
+// if it is an valid project. Maybe use the .topdir file?
 
 void usage(std::ostream& os, const std::string& program){
-  fprint(os, "Usage: {} [options] <proj-name>\n", program);
+  fprint(os, "Usage: {} [options] [subcommand]\n", program);
 }
 
 void help(const std::string& program){
   usage(std::cout, program);
   print("\n"
 	"  Options:\n"
-	"    /?,/h        prints this help.\n"
-	"    /q           be quiet.\n"
-	"    /F           force the default value on all confirmations.\n"
+	"    /?,/h                prints this help.\n"
+	"    /q                   be quiet.\n"
+	"    /F                   force the default value on all confirmations.\n"
+	"    /p <proj-name>       specifies the name of the project.\n"
 	"Note that you can use `-` as a prefix for flags as well.\n"
+	"\n"
+	"  Subcommands:\n"
+	"    list                 lists all of the projects that is in the cpp_dir. (basically all folders in there *for now*)\n"
+	"    help                 prints this help.\n"
+	"    dir                  runs emacs on the cpp_dir.\n"
+	"    uwu                  uwu\n"
 	"\n"
 	"Program to make a cpp project.\n"
 	"Made by Momoyon.\n");
@@ -64,14 +75,29 @@ int main(int argc, char* argv[]){
 	quiet = true;
       } else if (a == "F"){
 	force = true;
+      } else if (a == "p"){
+        if (!arg){
+	  fprint(std::cerr, "ERROR: Project name not provied after flag `{}{}`\n", prefix, a);
+	  exit(1);
+	}
+	proj_name = arg.pop();
       } else {
 	fprint(std::cerr, "ERROR: Unknown flag `{}{}`\n", prefix, a);
 	exit(1);
       }
-
     } else {
-      if (proj_name.empty())
-	proj_name = a;
+      if (a == "list"){
+	should_list = true;
+      } else if (a == "help"){
+	wants_help = true;
+      } else if (a == "dir"){
+	dir = true;
+      } else if (a == "uwu"){
+	wants_uwu = true;
+      } else {
+	fprint(std::cerr, "ERROR: Unknown subcommand `{}`\n", a);
+	exit(1);
+      }
     }
   }
 
@@ -86,13 +112,33 @@ int main(int argc, char* argv[]){
     exit(0);
   }
 
-  // open the cpp_dir in emacs if no proj-name is provided
-  if (proj_name.empty()){
-    if (!quiet) print("INFO: Running emacs on `{}`\n", cpp_dir);
+  if (wants_uwu){
+    print(" ∩ ∩ \n"
+	  "(uwu)\n");
+    exit(0);
+  }
 
+  if (should_list){
+    const std::string projs_dir = (cpp_dir.empty() ? win::get_current_dir() : cpp_dir);
+    print("Projects in {}:\n", projs_dir);
+    std::vector<std::string> projs = win::get_dirs_in_dir(projs_dir);
+    for (auto& d : projs){
+      if (d.size() > 0 && d[0] == '.') continue;
+      print("  {}\n", d);
+    }
+    print("\n"
+	  "Total {} projects\n", projs.size());
+    exit(0);
+  }
 
+  if (dir){
+    if (!quiet) print("info: running emacs on `{}`\n", cpp_dir);
     win::wait_and_close_process(win::run_process("runemacs", cpp_dir));
     exit(0);
+  }
+
+  if (proj_name.empty()){
+    help(program);
   }
 
   ASSERT(cpp_dir[cpp_dir.size()-1] == '\\');
