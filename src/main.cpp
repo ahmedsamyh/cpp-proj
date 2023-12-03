@@ -43,8 +43,6 @@ static std::string things[] = {
   ">.<\n",
 };
 static constexpr size_t things_size = (sizeof(things) / sizeof(things[0]));
-// TODO: Change every run_process() to not wait until child process
-// finished when run_sync() and run_async() is implemented in stdcpp.hpp
 // TODO: Have some sort of marker in the project folder to identify
 // if it is an valid project. Maybe use the .topdir file?
 
@@ -169,8 +167,8 @@ int main(int argc, char* argv[]){
   }
 
   if (dir){
-    if (!quiet) print("info: running emacs on `{}`\n", cpp_dir);
-    win::wait_and_close_process(win::run_process("runemacs", cpp_dir));
+    if (!quiet) print("INFO: running emacs on `{}`\n", cpp_dir);
+    win::run_async("runemacs", cpp_dir);
     exit(0);
   }
 
@@ -209,7 +207,7 @@ int main(int argc, char* argv[]){
 
   // run emacs on project folder
   if (!quiet) print("INFO: Running emacs on `{}`\n", full_proj_path);
-  win::wait_and_close_process(win::run_process("runemacs", FMT("{}", full_proj_path)));
+  win::run_async("runemacs", FMT("{}", full_proj_path));
   exit(0);
 
   return 0;

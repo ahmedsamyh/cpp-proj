@@ -19,10 +19,49 @@ namespace fs = std::filesystem;
 
 // TODO: Make a loggin system
 
+// Option --------------------------------------------------
+
+template <typename T>
+struct Option{
+  T value;
+  bool _has_value{false};
+
+  Option(){ }
+
+  Option(T _value){
+    value = _value;
+    _has_value = true;
+  }
+
+  operator bool() { return has_value(); }
+  bool has_value() const { return _has_value; }
+  bool operator!() { return !has_value(); }
+
+  T operator=(const T& _v){
+    value = _v;
+    _has_value = true;
+    return value;
+  }
+
+  T operator=(T& _v){
+     value = _v;
+    _has_value = true;
+    return value;
+  }
+
+  T& unwrap() { return value; }
+
+};
+
+
+
 namespace win {
 
-  PROCESS_INFORMATION run_process(const std::string& program, const std::string& cmd, bool no_stdout=false, bool new_console=false);
-  void wait_and_close_process(PROCESS_INFORMATION proc);
+  typedef PROCESS_INFORMATION Proc;
+
+  int run_sync(const std::string& program, const std::string& cmd);
+  Option<Proc> run_async(const std::string& program, const std::string& cmd);
+  int close_proc(const Proc& proc);
   HINSTANCE open_dir(const std::string& dir);
   HINSTANCE open_file(const std::string& file);
   std::string last_error_str();
@@ -94,43 +133,6 @@ struct Arg {
   std::string pop();
 };
 
-
-// Option --------------------------------------------------
-
-template <typename T>
-struct Option{
-  T value;
-  bool _has_value{false};
-
-  Option(){ }
-
-  Option(T _value){
-    value = _value;
-    _has_value = true;
-  }
-
-  operator bool() { return has_value(); }
-  bool has_value() const { return _has_value; }
-  bool operator!() { return !has_value(); }
-
-
-  T operator=(const T& _v){
-    value = _v;
-    _has_value = true;
-    return value;
-  }
-			   
-  T operator=(T& _v){
-     value = _v;
-    _has_value = true;
-    return value;
-  }
-
-  T& unwrap() { return value; }
-
-};
-
-
 // ch --------------------------------------------------
 namespace ch {
   bool isspace(const char& ch);
@@ -141,7 +143,7 @@ namespace ch {
 
 // str --------------------------------------------------
 namespace str {
-  
+
   std::string tolower(std::string s);
   std::string toupper(std::string s);
   std::string rtrim(std::string str);
@@ -167,7 +169,7 @@ namespace str {
 
 // sv --------------------------------------------------
 namespace sv {
-  
+
   std::string_view& rtrim(std::string_view& sv);
   std::string_view& ltrim(std::string_view& sv);
   std::string_view& trim(std::string_view& sv);
@@ -215,21 +217,16 @@ namespace file {
 #if defined USE_WINAPI
 
 namespace win {
-  
-  PROCESS_INFORMATION run_process(const std::string& program, const std::string& cmd, bool no_stdout, bool new_console) {
-    STARTUPINFOA startupinfo{};
-    if (no_stdout){
-      startupinfo.dwFlags |= STARTF_USESTDHANDLES;
-      startupinfo.hStdOutput = NULL;
-    }
-    startupinfo.cb = sizeof(startupinfo);
-    PROCESS_INFORMATION child_process_info{};
 
+  int run_sync(const std::string& program, const std::string& cmd){
+    STARTUPINFOA si{};
+    si.cb = sizeof(si);
+    Proc child_proc;
+    
     std::string full_cmd = FMT("{} {}", program, cmd).c_str();
 
     DWORD creation_flags = NORMAL_PRIORITY_CLASS;
-    if (new_console) creation_flags |= CREATE_NEW_CONSOLE;
-  
+
     if (!CreateProcessA(NULL,
 			LPSTR(full_cmd.c_str()),
 			NULL,
@@ -238,28 +235,73 @@ namespace win {
 			creation_flags,
 			NULL,
 			NULL,
-			&startupinfo,&child_process_info)) {
-      fprint(std::cerr, "ERROR: {}(\"{}\", \"{}\", {}, {}) -> {}\n", __func__, program, cmd, no_stdout, new_console, last_error_str());
-      exit(1);
-    };
-    return child_process_info;
-  }
-
-  void wait_and_close_process(PROCESS_INFORMATION proc){
-    if (WaitForSingleObject(proc.hProcess, INFINITE) == WAIT_FAILED){
-      fprint(std::cerr, "ERROR: {} -> {}\n", __func__, last_error_str());
-      exit(1);
+			&si,
+			&child_proc)){
+      fprint(std::cerr, "ERROR: CreateProcessA() -> {}\n",  last_error_str());
+      return 1;
     }
 
+    if (WaitForSingleObject(child_proc.hProcess, INFINITE) == WAIT_FAILED){
+      fprint(std::cerr, "ERROR: WaitForSingleObject() -> {}\n", last_error_str());
+      return 1;
+    }
+    
+    DWORD child_proc_exit_code{};
+    GetExitCodeProcess(child_proc.hProcess, &child_proc_exit_code);
+    if (child_proc_exit_code != 0){
+      fprint(std::cerr, "ERROR: Process exited with code: {}\n", child_proc_exit_code);
+      return child_proc_exit_code;
+    }
+
+    CloseHandle(child_proc.hProcess);
+    CloseHandle(child_proc.hThread);
+    return 0;
+  }
+
+  Option<Proc> run_async(const std::string& program, const std::string& cmd){
+
+    STARTUPINFOA si{};
+    si.cb = sizeof(si);
+    Proc child_proc;
+    
+    std::string full_cmd = FMT("{} {}", program, cmd).c_str();
+
+    DWORD creation_flags = NORMAL_PRIORITY_CLASS;
+
+    if (!CreateProcessA(NULL,
+			LPSTR(full_cmd.c_str()),
+			NULL,
+			NULL,
+			TRUE,
+			creation_flags,
+			NULL,
+			NULL,
+			&si,
+			&child_proc)){
+      fprint(std::cerr, "ERROR: CreateProcessA() -> {}\n",  last_error_str());
+      return Option<Proc>{};
+    }
+    
+    return Option<Proc>(child_proc);
+  }
+
+  int close_proc(const Proc& proc){
+    if (WaitForSingleObject(proc.hProcess, INFINITE) == WAIT_FAILED){
+      fprint(std::cerr, "ERROR: WaitForSingleObject() -> {}\n", last_error_str());
+      return 1;
+    }
+    
     DWORD proc_exit_code{};
     GetExitCodeProcess(proc.hProcess, &proc_exit_code);
     if (proc_exit_code != 0){
       fprint(std::cerr, "ERROR: Process exited with code: {}\n", proc_exit_code);
-      exit(proc_exit_code);
+      return proc_exit_code;
     }
-  
+
     CloseHandle(proc.hProcess);
     CloseHandle(proc.hThread);
+    
+    return 0;
   }
 
   HINSTANCE open_dir(const std::string& dir){
@@ -414,12 +456,12 @@ std::string Arg::pop() {
 
   *argc = *argc - 1;
   *argv = *argv + 1;
-  
+
   if (evaluating_quote){
     arg += " ";
     arg += pop();
   }
-  
+
   return arg;
 }
 
@@ -462,7 +504,7 @@ namespace str {
   std::vector<std::string> split_by(std::string str, char delim, bool add_empty){
     std::string elm{};
     std::vector<std::string> res{};
-  
+
     std::string::size_type nl_pos{0};
     while (nl_pos != std::string::npos){
       nl_pos = str.find(delim);
@@ -541,7 +583,7 @@ namespace str {
     str = str.substr(0, s_i);
     return str;
   }
-  
+
   std::string remove_char(std::string str, const char& ch){
     auto ch_pos = str.find(ch);
     while (ch_pos != std::string::npos){
@@ -562,7 +604,7 @@ namespace str {
       str = before_thing + with + after_thing;
       thing_pos = str.find(thing, before_thing.size() + with.size());
     }
-  
+
     return str;
   }
 
@@ -600,10 +642,10 @@ namespace str {
     if (ch_idx == std::string::npos){
       return str;
     }
-    
+
     return str.substr(ch_idx+1);
   }
-  
+
   std::string trim_quote(std::string str){
     if (str.empty()) return {};
     if (str[0] == '\'') str = lremove(str);
@@ -622,12 +664,12 @@ namespace str {
     }
     return str;
   }
-  
+
 } // namespace str
 
 // sv --------------------------------------------------
 namespace sv{
-  
+
 std::string_view& rtrim(std::string_view& sv){
   while (!sv.empty() && (std::isspace(sv[sv.size()-1]) || sv[sv.size()-1] == '\0')){
     sv.remove_suffix(1);
@@ -650,12 +692,12 @@ std::string_view& lremove(std::string_view& sv, size_t size){
   sv.remove_prefix(size);
   return sv;
 }
-  
+
 std::string_view& rremove(std::string_view& sv, size_t size){
   if (sv.empty()) return sv;
   if (size > sv.size()) size = sv.size();
   sv.remove_suffix(size);
-  return sv;  
+  return sv;
 }
 
 std::string_view& lremove_until(std::string_view& sv, std::function<bool(const char&)> predecate){
@@ -664,12 +706,12 @@ std::string_view& lremove_until(std::string_view& sv, std::function<bool(const c
   }
   return sv;
 }
-  
+
 std::string_view& rremove_until(std::string_view& sv, std::function<bool(const char&)> predecate){
   while (predecate(sv[sv.size()-1])){
     sv::rremove(sv);
   }
-  return sv;  
+  return sv;
 }
 
 std::string_view& lremove_until(std::string_view& sv, const std::string_view& checker){
@@ -684,7 +726,7 @@ std::string_view& lremove_until(std::string_view& sv, const std::string_view& ch
   sv = sv.substr(s_i-1);
   return sv;
 }
-  
+
 std::string_view& rremove_until(std::string_view& sv, const std::string_view& checker){
   if (checker.size() > sv.size() || sv.empty() || checker.empty()) return sv;
 
@@ -709,7 +751,7 @@ namespace math {
 float randomf(const float min, const float max) {
   return (float(rand()) / float(RAND_MAX) * (max - min)) + min;
 }
-  
+
 int randomi(const int min, const int max) {
   return int((float(rand()) / float(RAND_MAX) * (max - min)) + min);
 }
@@ -777,7 +819,7 @@ namespace file {
     ifs.seekg(0, std::ios::beg);
 
     ifs.read((char*)res.data(), res.size());
-    
+
     ifs.close();
     return res;
   }
@@ -802,7 +844,7 @@ namespace file {
 	file = file.substr(0, value_pos) + value + file.substr(value_pos+value.size());
 
 	print("file: |{}|\n", file);
-	
+
       } else {
 	print("WARNING: Ignored writing ({}: {}) because it already exists\n", name, value);
       }
