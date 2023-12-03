@@ -176,6 +176,7 @@ int main(int argc, char* argv[]){
 
   if (proj_name.empty()){
     help(program);
+    exit(0);
   }
 
   ASSERT(cpp_dir[cpp_dir.size()-1] == '\\');
