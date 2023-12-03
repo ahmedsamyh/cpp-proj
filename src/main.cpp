@@ -10,6 +10,8 @@ static bool quiet = false;
 static bool should_list = false;
 static bool dir = false;
 static bool wants_thing = false;
+static bool wants_search = false;
+static std::string search_string;
 static std::string things[] = {
   "uwu\n",
 
@@ -54,16 +56,17 @@ void help(const std::string& program){
   usage(std::cout, program);
   print("\n"
 	"  Options:\n"
-	"    /?,/h                prints this help.\n"
-	"    /q                   be quiet.\n"
-	"    /F                   force the default value on all confirmations.\n"
-	"    /p <proj-name>       specifies the name of the project.\n"
+	"    /?,/h                         prints this help.\n"
+	"    /q                            be quiet.\n"
+	"    /F                            force the default value on all confirmations.\n"
+	"    /p <proj-name>                specifies the name of the project.\n"
 	"Note that you can use `-` as a prefix for flags as well.\n"
 	"\n"
 	"  Subcommands:\n"
-	"    list                 lists all of the projects that is in the cpp_dir. (basically all folders in there *for now*)\n"
-	"    help                 prints this help.\n"
-	"    dir                  runs emacs on the cpp_dir.\n"
+	"    list                          lists all of the projects that is in the cpp_dir. (basically all folders in there *for now*)\n"
+	"    help                          prints this help.\n"
+	"    dir                           runs emacs on the cpp_dir.\n"
+	"    search <wildcard-string>      searches the cpp_dir and lists the projects that match the provided wildcard-string.\n"
 	"    ???                  ???\n"
 	"\n"
 	"Program to make a cpp project.\n"
@@ -90,7 +93,69 @@ bool confirmation(const std::string question, bool _default=true){
   return ((_default && response=="") || response=="y" || response=="yes") ? true : false;
 }
 
+std::vector<std::string> search(std::string needle, const std::vector<std::string>& haystack, bool icase = false){
+  std::vector<std::string> found;
+  if (icase) needle = str::tolower(needle);
+  if (needle.find('*') == std::string::npos){
+    for (auto& h : haystack){
+      std::string hay = (icase ? str::tolower(h) : h);
+      if (needle == hay){
+	found.push_back(h);
+      }
+    }
+  } else {
+    if (needle.starts_with("*") && needle.ends_with("*")){
+      needle = str::lremove(needle);
+      needle = str::rremove(needle);
+      for (auto& h : haystack){
+	std::string hay = (icase ? str::tolower(h) : h);
+	if (hay.find(needle) != std::string::npos){
+	  found.push_back(h);
+	}
+      }
+    } else if (needle.starts_with("*")){
+      needle = str::lremove(needle);
+      for (auto& h : haystack){
+	std::string hay = (icase ? str::tolower(h) : h);
+	if (hay.ends_with(needle)){
+	  found.push_back(h);
+	}
+      }
+    } else if (needle.ends_with("*")){
+      needle = str::rremove(needle);
+      for (auto& h : haystack){
+	std::string hay = (icase ? str::tolower(h) : h);
+	if (hay.starts_with(needle)){
+	  found.push_back(h);
+	}
+      }
+    } else {
+      // * is somewhere in the middle
+    }
+  }
+  return found;
+}
+
+int test_search(){
+  std::vector<std::string> haystack = win::get_dirs_in_dir("D:\\");
+  std::string needle = "b*";
+  auto found = search(needle, haystack, true);
+  if (found.empty()){
+    print("INFO: Couldn't find `{}` in haystack!\n", needle);
+    return 1;
+  }
+  print("Found:\n");
+  for (auto f : found){
+    print("  `{}`\n", f);
+  }
+
+  return 0;
+}
+
+
 int main(int argc, char* argv[]){
+  // return test_search();
+
   srand(unsigned int(time(0)));
   ARG();
   program = arg.pop();
@@ -109,7 +174,7 @@ int main(int argc, char* argv[]){
 	force = true;
       } else if (a == "p"){
         if (!arg){
-	  fprint(std::cerr, "ERROR: Project name not provied after flag `{}{}`\n", prefix, a);
+	  fprint(std::cerr, "ERROR: Project name not provdied after flag `{}{}`\n", prefix, a);
 	  exit(1);
 	}
 	proj_name = arg.pop();
@@ -126,6 +191,13 @@ int main(int argc, char* argv[]){
 	dir = true;
       } else if (a == "???"){
 	wants_thing = true;
+      } else if (a == "search"){
+	wants_search = true;
+	if (!arg){
+	  fprint(std::cerr, "ERROR: Search string not provided for subcommand `{}`\n", a);
+	  exit(1);
+	}
+	search_string = arg.pop();
       } else {
 	fprint(std::cerr, "ERROR: Unknown subcommand `{}`\n", a);
 	exit(1);
@@ -138,6 +210,9 @@ int main(int argc, char* argv[]){
     print("WARNING: `CppDir` environment variable is not defined making the project in the current directory...\n");
   }
   if (cpp_dir[cpp_dir.size()-1] != '\\') cpp_dir += '\\';
+
+  const std::string projs_dir = (cpp_dir.empty() ? win::get_current_dir() : cpp_dir);
+  std::vector<std::string> projs = win::get_dirs_in_dir(projs_dir);
 
   if (wants_help){
     help(program);
@@ -153,10 +228,22 @@ int main(int argc, char* argv[]){
     exit(0);
   }
 
+  if (wants_search){
+    if (!quiet) print("INFO: Searching for string `{}` in `{}`...\n", search_string, projs_dir);
+    auto found = search(search_string, projs, true);
+    if (found.empty()){
+      fprint(std::cerr, "ERROR: Could not find any projects named `{}` in `{}`...\n", search_string, projs_dir);
+      exit(1);
+    }
+    print("Found:\n");
+    for (auto& f : found){
+      print("  `{}`\n", f);
+    }
+    exit(0);
+  }
+
   if (should_list){
-    const std::string projs_dir = (cpp_dir.empty() ? win::get_current_dir() : cpp_dir);
     print("Projects in {}:\n", projs_dir);
-    std::vector<std::string> projs = win::get_dirs_in_dir(projs_dir);
     for (auto& d : projs){
       if (d.size() > 0 && d[0] == '.') continue;
       print("  {}\n", d);
@@ -167,8 +254,8 @@ int main(int argc, char* argv[]){
   }
 
   if (dir){
-    if (!quiet) print("INFO: running emacs on `{}`\n", cpp_dir);
-    win::run_async("runemacs", cpp_dir);
+    if (!quiet) print("INFO: running emacs on `{}`\n", projs_dir);
+    win::run_async("runemacs", projs_dir);
     exit(0);
   }
 
@@ -178,7 +265,7 @@ int main(int argc, char* argv[]){
   }
 
   ASSERT(cpp_dir[cpp_dir.size()-1] == '\\');
-  std::string full_proj_path = FMT("{}{}", cpp_dir, proj_name);
+  std::string full_proj_path = FMT("{}{}", projs_dir, proj_name);
 
   // check if project already exists
   if (fs::exists(fs::path(full_proj_path))){
