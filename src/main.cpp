@@ -3,6 +3,8 @@
 #include <stdcpp.hpp>
 
 static bool force = false;
+static bool yes = false;
+static bool no = false;
 static std::string program;
 static std::string proj_name;
 static bool wants_help = false;
@@ -59,6 +61,8 @@ void help(const std::string& program){
 	"    /?,/h                         prints this help.\n"
 	"    /q                            be quiet.\n"
 	"    /F                            force the default value on all confirmations.\n"
+	"    /Y                            force yes on all confirmations.\n"
+	"    /N                            force no on all confirmations.\n"
 	"    /p <proj-name>                specifies the name of the project.\n"
 	"Note that you can use `-` as a prefix for flags as well.\n"
 	"\n"
@@ -67,7 +71,7 @@ void help(const std::string& program){
 	"    help                          prints this help.\n"
 	"    dir                           runs emacs on the cpp_dir.\n"
 	"    search <wildcard-string>      searches the cpp_dir and lists the projects that match the provided wildcard-string.\n"
-	"    ???                  ???\n"
+	"    ???                           ???\n"
 	"\n"
 	"Program to make a cpp project.\n"
 	"Made by Momoyon.\n");
@@ -75,6 +79,8 @@ void help(const std::string& program){
 
 bool confirmation(const std::string question, bool _default=true){
   if (force) return _default;
+  if (yes) return true;
+  if (no) return false;
   std::string response = "AAA";
   response = str::tolower(response);
   auto valid = [&](const std::string& str){ return str=="" || str=="y" || str=="yes" || str=="n" || str=="no"; };
@@ -153,6 +159,13 @@ int test_search(){
 }
 
 
+#define mutually_exclusive(str, ...) mutually_exclusive_impl(FMT(str, __VA_ARGS__))
+
+void mutually_exclusive_impl(const std::string& flags) {
+  print("ERROR: {} are mutually exclusive!\n", flags);
+  exit(1);
+}
+
 int main(int argc, char* argv[]){
   // return test_search();
 
@@ -170,14 +183,27 @@ int main(int argc, char* argv[]){
 	wants_help = true;
       } else if (a == "q"){
 	quiet = true;
-      } else if (a == "F"){
-	force = true;
       } else if (a == "p"){
         if (!arg){
 	  fprint(std::cerr, "ERROR: Project name not provdied after flag `{}{}`\n", prefix, a);
 	  exit(1);
 	}
 	proj_name = arg.pop();
+      } else if (a == "F"){
+        if (yes || no) {
+	  mutually_exclusive("`{}Y`, `{}N` and `{}F`", prefix, prefix, prefix);
+	}
+	force = true;
+      } else if (a == "Y") {
+	if (force || no) {
+	  mutually_exclusive("`{}Y`, `{}N` and `{}F`", prefix, prefix, prefix);
+	}
+	yes = true;
+      } else if (a == "N") {
+	if (force || yes) {
+	  mutually_exclusive("`{}Y`, `{}N` and `{}F`", prefix, prefix, prefix);
+	}
+	no = true;
       } else {
 	fprint(std::cerr, "ERROR: Unknown flag `{}{}`\n", prefix, a);
 	exit(1);
